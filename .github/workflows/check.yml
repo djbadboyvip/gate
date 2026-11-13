@@ -2,7 +2,7 @@ name: VPN Gate Node Check
 
 on:
   schedule:
-    - cron: '0 */8 * * *'    # 每 3 小时整点运行一次（UTC 时间）
+    - cron: '0 */10 * * *'    # 每 10 小时整点运行一次（UTC 时间）
   workflow_dispatch:           # 保持支持手动触发
 permissions:
   contents: read
@@ -102,9 +102,12 @@ jobs:
               raise SystemExit(0)
 
           stats = {}
+          countries = {}
           try:
               with open("public/data.json", encoding="utf-8") as f:
-                  stats = json.load(f).get("stats", {}) or {}
+                  data = json.load(f)
+                  stats = data.get("stats", {}) or {}
+                  countries = data.get("countries", {}) or {}
           except Exception as exc:
               print(f"读 public/data.json 失败: {exc}")
 
@@ -113,6 +116,21 @@ jobs:
           valid_nodes = stats.get("success", "?")
           country_count = stats.get("countries", "?")
           residential = stats.get("residential_est", "?")
+
+          # 国家列表：只要简码，不要数量，按可用节点数倒序
+          country_list = "未知"
+          try:
+              counts = []
+              for entry in countries.values():
+                  code = str(entry.get("code", "")).strip().lower()
+                  n = len(entry.get("nodes", []))
+                  if code and n:
+                      counts.append((n, code))
+              counts.sort(key=lambda x: (-x[0], x[1]))
+              if counts:
+                  country_list = " ".join(code for _, code in counts)
+          except Exception as exc:
+              print(f"统计国家列表失败: {exc}")
 
           if check_outcome != "success":
               title = "❌ *VPN Gate 节点检测失败！*"
@@ -129,6 +147,7 @@ jobs:
                   f"🔧 SSTP 节点: `{sstp_nodes}`\n"
                   f"🟢 可用节点: `{valid_nodes}`\n"
                   f"🌍 国家数量: `{country_count}`\n"
+                  f"🗺️ 国家列表: `{country_list}`\n"
                   "──────────────────────\n"
                   "🔍 部署步骤失败，请检查 GitHub Actions 运行日志。"
               )
@@ -140,8 +159,9 @@ jobs:
                   f"🟢 可用节点: `{valid_nodes}`\n"
                   f"🏠 住宅节点: `{residential}`\n"
                   f"🌍 国家数量: `{country_count}`\n"
+                  f"🗺️ 国家列表: `{country_list}`\n"
                   "──────────────────────\n"
-                  f"🌍 平台: `{repo}`\n"
+                  f"🌍 平台: [{repo}]({site})\n"
                   f"🌐 访问地址: [点击查看在线页面]({site})"
               )
 
